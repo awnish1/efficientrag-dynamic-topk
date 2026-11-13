@@ -1,0 +1,3 @@
+status,labeler,filter,k,questions,raw_found,gold_documents,retained_found,raw_all_gold_questions,retained_all_gold_questions,average_rounds,recorded_pipeline_seconds
+historical_recorded_not_reproduced,checkpoint-9000,checkpoint-500,10,100,199,200,178,99,79,3.47,157.19
+historical_recorded_not_reproduced,checkpoint-8000,checkpoint-500,10,100,197,200,186,97,88,3.92,179.07

@@ -1,0 +1,53 @@
+{
+  "python": "3.15.2 (main, Oct 25 2026, 16:57:51) [Clang 21.0.0 (clang-2100.3.34.2)]",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "paths": {
+    "corpus": {
+      "path": "/content/drive/MyDrive/EfficientRAG_New_Run/reconstructed_hotpot100/corpus.jsonl",
+      "exists": false
+    },
+    "evaluation": {
+      "path": "/content/drive/MyDrive/EfficientRAG_New_Run/reconstructed_hotpot100/valid.jsonl",
+      "exists": false
+    },
+    "labeler_config": {
+      "path": "/content/drive/MyDrive/EfficientRAG/EfficientRAG_New_Run/labeler_fixed_full_data/labeler_20260918_031818/checkpoint-8000/config.json",
+      "exists": false
+    },
+    "labeler_weights": {
+      "path": "/content/drive/MyDrive/EfficientRAG/EfficientRAG_New_Run/labeler_fixed_full_data/labeler_20260918_031818/checkpoint-8000/model.safetensors",
+      "exists": false
+    },
+    "filter_config": {
+      "path": "/content/drive/MyDrive/EfficientRAG_New_Run/filter_checkpoint_500/config.json",
+      "exists": false
+    },
+    "filter_weights": {
+      "path": "/content/drive/MyDrive/EfficientRAG_New_Run/filter_checkpoint_500/model.safetensors",
+      "exists": false
+    },
+    "embeddings": {
+      "path": "/content/EfficientRAG-official/data/corpus/hotpotQA/contriever/passages_00",
+      "exists": false
+    }
+  },
+  "missing": [
+    "/content/drive/MyDrive/EfficientRAG_New_Run/reconstructed_hotpot100/corpus.jsonl",
+    "/content/drive/MyDrive/EfficientRAG_New_Run/reconstructed_hotpot100/valid.jsonl",
+    "/content/drive/MyDrive/EfficientRAG/EfficientRAG_New_Run/labeler_fixed_full_data/labeler_20260918_031818/checkpoint-8000/config.json",
+    "/content/drive/MyDrive/EfficientRAG/EfficientRAG_New_Run/labeler_fixed_full_data/labeler_20260918_031818/checkpoint-8000/model.safetensors",
+    "/content/drive/MyDrive/EfficientRAG_New_Run/filter_checkpoint_500/config.json",
+    "/content/drive/MyDrive/EfficientRAG_New_Run/filter_checkpoint_500/model.safetensors",
+    "/content/EfficientRAG-official/data/corpus/hotpotQA/contriever/passages_00"
+  ],
+  "packages": {
+    "torch": null,
+    "transformers": null,
+    "tokenizers": null,
+    "faiss-cpu": null,
+    "spacy": null,
+    "sentencepiece": null,
+    "numpy": "2.5.4",
+    "huggingface-hub": null
+  }
+}

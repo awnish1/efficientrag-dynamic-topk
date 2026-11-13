@@ -1,0 +1,6 @@
+experiment,status,raw_recall,labeler_retained_recall,average_rounds,average_retrieved_passages,reason
+A_fixed5,blocked_not_measured,,,,,"Required checkpoint weights, corpus, evaluation file, embeddings and CUDA runtime unavailable locally"
+B_fixed10,blocked_not_measured,,,,,"Required checkpoint weights, corpus, evaluation file, embeddings and CUDA runtime unavailable locally"
+C_query,blocked_not_measured,,,,,"Required checkpoint weights, corpus, evaluation file, embeddings and CUDA runtime unavailable locally"
+D_dynamic,blocked_not_measured,,,,,"Required checkpoint weights, corpus, evaluation file, embeddings and CUDA runtime unavailable locally"
+E_full,blocked_not_measured,,,,,"Required checkpoint weights, corpus, evaluation file, embeddings and CUDA runtime unavailable locally"

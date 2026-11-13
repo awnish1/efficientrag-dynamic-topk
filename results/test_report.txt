@@ -1,0 +1,16 @@
+test_actual_k_changes (test_adaptive.Tests.test_actual_k_changes) ... ok
+test_complexity (test_adaptive.Tests.test_complexity) ... ok
+test_empty_and_missing_scores (test_adaptive.Tests.test_empty_and_missing_scores) ... ok
+test_feedback_and_bounds (test_adaptive.Tests.test_feedback_and_bounds) ... ok
+test_filter_output_and_max_rounds (test_adaptive.Tests.test_filter_output_and_max_rounds) ... ok
+test_fixed_matches_original (test_adaptive.Tests.test_fixed_matches_original) ... ok
+test_metrics_merged_ids (test_adaptive.Tests.test_metrics_merged_ids) ... ok
+test_no_oracle_decisions (test_adaptive.Tests.test_no_oracle_decisions) ... ok
+test_per_question_reset (test_adaptive.Tests.test_per_question_reset) ... ok
+test_policy_validation (test_adaptive.Tests.test_policy_validation) ... ok
+test_stop_preserved (test_adaptive.Tests.test_stop_preserved) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 0.026s
+
+OK

@@ -1,0 +1,142 @@
+\RequirePackage[T1]{fontenc}
+\documentclass[conference]{IEEEtran}
+\usepackage{graphicx,amsmath,amssymb,booktabs,url}
+\usepackage{mathptmx}
+\usepackage[hidelinks]{hyperref}
+\title{Query-Adaptive EfficientRAG: Dynamic Top-K Retrieval for Multi-Hop Question Answering}
+\author{\IEEEauthorblockN{Awnish Kumar}\IEEEauthorblockA{Student ID: 202451188\\Indian Institute of Information Technology Vadodara}}
+\begin{document}
+\maketitle
+\begin{abstract}
+A fixed retrieval depth assigns the same passage budget to every question and retrieval round, although evidence needs can differ. We extend a restored EfficientRAG implementation with a deterministic query-complexity analyzer and an evidence-aware controller that selects $K\in\{5,10,15\}$. The extension reuses the existing retriever, Labeler, Tagger, Filter, and checkpoints, and preserves the original stopping behavior and four-round safeguard. On a local evaluation of 100 HotpotQA questions over 991 passages, mean retrieved entries decrease from 39.40 to 32.65, a 17.1\% reduction. Three repeated retrieval runs give mean times of 164.32 and 138.70 seconds, respectively, a 15.6\% reduction. With the same explicitly defined context selector and local Llama 3 8B generator, strict exact match changes from 57\% to 59\% and token F1 from 67.85\% to 68.77\%. Raw supporting-document recall decreases by one percentage point, while final-context recall increases by half a point. Ablations associate most retrieval savings with the evidence controller. These results support further evaluation of adaptive passage budgets, but do not establish statistical significance or generalization beyond the small evaluation setting.
+\end{abstract}
+\begin{IEEEkeywords}
+retrieval-augmented generation, multi-hop question answering, adaptive retrieval, EfficientRAG
+\end{IEEEkeywords}
+
+\section{Introduction}
+Multi-hop question answering requires information that may be distributed across multiple passages. Retrieving more passages can expose useful supporting evidence, but also increases the number of passage entries processed by downstream components. A fixed value of $K$ provides a simple and reproducible baseline, yet it cannot allocate different retrieval depths according to the current question or the evidence already obtained.
+
+EfficientRAG uses iterative retrieval with lightweight learned components to construct subsequent queries without an LLM call at each iteration~\cite{efficientrag}. This project studies a narrower extension to an existing implementation: changing the number of passages requested at each round while retaining the original inference components. The aim is to investigate the trade-off between retrieved volume and evidence coverage, rather than replace query construction or stopping with another language model.
+
+Our starting point is a restored, previously trained pipeline using Contriever, FAISS, and DeBERTa-based Labeler and Filter checkpoints. The experimental control is this restored implementation with fixed $K=10$. It is not the published EfficientRAG benchmark configuration, and its results should not be interpreted as reproducing the paper's full benchmark. The local corpus and evaluation set are substantially smaller.
+
+We implement two mechanisms. A query analyzer selects an initial depth from simple lexical features. An evidence controller then adjusts the next depth using distinct continuing passages, newly useful passage identities, and extracted words. Neither mechanism receives reference answers or oracle supporting-document identities. The controller proposes a depth only; the existing pipeline decides whether another round occurs.
+
+The contributions are an interpretable integration of these mechanisms, a comparison under matched data and checkpoint hashes, and an ablation study separating initial query adaptation from per-round evidence adaptation. We also distinguish raw retrieved evidence from the smaller final context supplied to the generator. This distinction matters because lower raw recall need not imply lower recall after context selection.
+
+\section{Background and Scope}
+EfficientRAG provides the learned passage labeling and extractive query filtering on which this extension depends~\cite{efficientrag}. We retain those roles. Contriever is a dense retrieval approach developed using contrastive learning~\cite{contriever}; the restored project uses its \texttt{contriever-msmarco} model with a FAISS index. HotpotQA includes questions requiring evidence across documents, including comparison questions~\cite{hotpotqa}. Here, only a pre-existing 100-question subset and its 991-passage corpus are evaluated.
+
+Question-adaptive retrieval is not a new research direction. Adaptive-RAG selects among retrieval strategies according to estimated question complexity~\cite{adaptive}. Our study instead controls passage depth within one restored EfficientRAG pipeline, using deterministic initialization and already available evidence feedback. We do not compare against Adaptive-RAG experimentally or claim that this small extension establishes a new state of the art.
+
+The project also requires careful historical separation. Earlier saved answer results used a recovered workflow whose final deduplication and context-cap implementation was not available in the recovered generator. Consequently, all current answer comparisons use a named, explicitly new selector applied identically to both methods. This avoids treating historical answer scores as the control for a newly reconstructed context pipeline.
+
+\section{Method}
+\subsection{Query-Based Initial Depth}
+Let $q$ be the original question, and let $L(q)$ be its token count under the implementation's regular-expression tokenizer. The analyzer sums six binary indicators:
+\begin{equation}
+ s(q)=\mathbb{1}[L\geq16]+\mathbb{1}[L\geq25]+e+c+b+m.
+\end{equation}
+Here, $e$ indicates at least two capitalized spans after the first word, used as an inexpensive entity proxy. It is not a named-entity recognition model. The comparison indicator $c$ detects any of \emph{same, both, different, earlier, later, older, younger, compare, more}, or \emph{less}. The bridge indicator $b$ detects \emph{whose, which, who}, or \emph{that} after the first word. The multiple-fact indicator $m$ detects \emph{and} or \emph{both}. Features can overlap; for example, \emph{both} contributes to two indicators.
+\begin{equation}
+K_0=\begin{cases}5,&s<2,\\10,&2\leq s<4,\\15,&s\geq4.\end{cases}
+\end{equation}
+The thresholds are configurable prototype choices, not validated estimates of reasoning difficulty. No threshold sweep or independent tuning set was used in this evaluation. The same configuration is retained throughout the reported runs.
+
+\subsection{Evidence-Based Updates}
+After round $t$, let $U_t$ be the set of distinct passage IDs labeled \texttt{<CONTINUE>}. Let $S_t$ contain IDs previously observed with that label. Define $N_t=U_t\setminus S_t$ and let $W_t$ be the set of distinct normalized words in the Tagger's extracted information for continuing passages. Passage IDs serve only as opaque equality keys for novelty; oracle IDs are not consulted.
+
+The controller operates on the ordered levels $(5,10,15)$. If $U_t$ is empty, it keeps the current depth and defers to the original stopping logic. Otherwise, if $|N_t|\geq2$ and $|W_t|\geq6$, it decreases depth by one level. If that strong-evidence condition does not hold, but $|N_t|>0$, $|U_t|\geq2$, and $|W_t|\geq3$, it keeps the current level. For other nonempty continuing evidence it increases depth by one level. Updates are clamped to the available levels.
+
+Novelty is measured against previously useful evidence, not every previously retrieved passage. Thus a passage rejected in an earlier round can become newly useful if it later receives a continuing label. Duplicate IDs within a round contribute only once to passage counts. Distinct extracted words are a proxy for available information, not a calibrated confidence score or a count of model tokens.
+
+The design hypothesis is that strong new information may permit a narrower next search, whereas weak but continuing information may justify broadening it. These rules are hypotheses tested by the experiment. A decreasing depth is not a proof that the answer is already available, and the controller cannot override the Filter or force retrieval after termination.
+
+\subsection{Integration and Context Assembly}
+The selected $K$ is passed into the next retriever search, rather than applied as post-hoc truncation of a fixed-depth retrieval. Per-round logs preserve the original fields and add selected depth, initial features, evidence statistics, and update reasons. Existing weights, embeddings, index, label semantics, and the four-round safeguard are retained.
+
+Final context uses the new selector \texttt{first\_occurrence\_max10}. It visits rounds 0--3 in order, stops at the first missing round, excludes passages labeled \texttt{<TERMINATE>}, deduplicates by exact passage ID while preserving first occurrence, and keeps at most ten passages. Equal text with different IDs is not collapsed. The exact selected IDs are verified against the local answer outputs. This selector is shared by the fixed and full dynamic answer runs; equivalence to a lost historical selector is not assumed.
+
+\section{Experimental Design}
+\subsection{Data, Models, and Execution}
+All retrieval configurations use the same ordered 100 questions, 991-passage corpus, and 991-vector FAISS index. Each question has two oracle supporting-document IDs, giving 200 gold-document occurrences. The retriever is \texttt{facebook/contriever-msmarco}. The restored Labeler uses \texttt{microsoft/deberta-v3-small} checkpoint-8000, and the separate Filter uses checkpoint-500. No retraining is performed for the extension.
+
+Retrieval runs execute on a Google Colab NVIDIA T4 runtime. The recorded environment includes Python 3.13, Transformers 4.57.1, and Tokenizers 0.22.2. An inference-only compatibility adaptation handles the unavailable \texttt{StableDropout} import; checkpoints are unchanged. Model-loading keys, evaluation mode, repeatable predictions, and fixed-mode trace parity are checked before the full comparison. Source, corpus, index, evaluation-order, package, and checkpoint hashes provide additional controls.
+
+Answer generation is run locally on an Apple M4 Mac using Ollama 0.32.14 and \texttt{llama3:8b}, with Q4\_0 quantization. Both methods use the same recorded model digest, recovered prompt, JSON answer schema, temperature zero, and 8192-token context setting. The generator requests a short answer and normalizes leading yes/no responses using the recovered code. Two hundred successful outputs are retained, one per question per method. Interrupted requests are resumed from saved records under matching provenance.
+
+\subsection{Configurations and Metrics}
+We evaluate fixed $K=10$, query-only initialization with the selected depth held across rounds, evidence-only updates starting at $K=10$, and the full extension. The maximum number of rounds is four for all configurations. Maximum possible passage entries are therefore 40 for fixed $K=10$ and 60 for adaptive configurations; the experiment controls the round limit, not an identical maximum passage budget. A fixed-$K=5$ baseline and budget-matched controls are not included in the completed study.
+
+Raw recall counts oracle IDs found anywhere in a question's retrieved rounds, independent of labels. Final-context recall counts oracle IDs remaining after the shared selector. Both are micro-averaged over 200 gold-document occurrences. Retrieved entries count all returned entries across rounds, including repetitions across rounds, whereas final-context size counts deduplicated retained passages. We also record the proportion of questions retaining both gold documents.
+
+Answer exact match uses lowercase, punctuation and article removal, and whitespace normalization followed by equality. Answer F1 uses normalized token overlap with special handling for mismatched yes/no/noanswer strings. These are answer metrics, not HotpotQA joint answer-and-supporting-fact scores. The recovered evaluator also emits substring match, but it is not reported as strict EM. Ollama's successful-response prompt and generated-token counts are summed separately; they do not measure retrieval-model tokens or total system computation.
+
+\subsection{Timing Protocol}
+After the initial validated pair, three additional runs per method are executed in the same Colab runtime. Within pairs, order alternates fixed--dynamic, dynamic--fixed, and fixed--dynamic. The reported means and sample standard deviations use these new repeats only. Timing starts after model loading, synchronizes CUDA around the retrieval loop, and includes retrieval-pipeline execution and incremental JSONL output. It excludes model startup and answer generation. Repeated timings and ablation summaries are retained as reported Colab outputs; the fixed/full retrieval JSONL and local answer results are available for direct audit.
+
+\section{Results}
+\begin{table}[t]
+\caption{Main comparison on 100 questions. Timing is mean $\pm$ sample SD over three retrieval runs.}
+\label{tab:main}\centering\small\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrr}\toprule
+Metric & Fixed $K=10$ & Full\\\midrule
+Answer strict EM (\%) &57.00&59.00\\
+Answer token F1 (\%) &67.85&68.77\\
+Raw gold recall (\%) &98.50&97.50\\
+Final-context recall (\%) &93.00&93.50\\
+Both gold retained (\%) &88.00&88.00\\
+Entries/query &39.40&32.65\\
+Rounds/query &3.94&3.83\\
+Context passages/query &7.76&7.24\\
+Retrieval time (s) &$164.32\pm1.78$&$138.70\pm0.48$\\
+Prompt tokens (total) &128,537&123,163\\
+Generated tokens (total) &1,122&1,116\\\bottomrule
+\end{tabular}
+\end{table}
+The full extension reduces mean retrieved entries by 6.75 per question, or 17.1\%, while mean repeated retrieval time decreases by 25.62 seconds per 100 questions, or 15.6\%. Average rounds decrease only from 3.94 to 3.83, so the main reduction in returned entries is associated with depth changes rather than elimination of many rounds. This association is consistent with the controller's intended role, although it is not an isolated measurement of each component's runtime cost.
+
+\begin{figure*}[t]
+\centering\includegraphics[width=\textwidth]{main_comparison.png}
+\caption{Fixed-$K$ and full-extension comparison. All bar axes start at zero. Timing error bars represent sample standard deviation across three retrieval repeats, not uncertainty in answer accuracy. Each answer metric is based on one successful generation per method per question.}
+\label{fig:main}
+\end{figure*}
+Raw gold recall changes from 197/200 to 195/200. After context selection, the direction reverses: retained gold counts are 186/200 and 187/200. Both methods retain both gold documents for 88 questions, while at least one is retained for 98 and 99 questions, respectively. Therefore, the half-point increase in aggregate final-context recall does not mean that more questions retain the complete two-document evidence set.
+
+Strict EM increases by two percentage points, corresponding to a net difference of two exact answers, and F1 increases by approximately 0.92 points. The small sample does not justify a claim of statistically established accuracy improvement. The results show that the observed efficiency savings did not coincide with lower aggregate answer metrics in this particular run. They do not prove that reduced retrieval causes improved reasoning.
+
+Prompt-token usage decreases by 5,374 tokens, or 4.18\%, substantially less than the reduction in retrieved entries. This is expected because the generator sees a deduplicated, capped context and a fixed prompt, rather than every raw retrieval entry. Output tokens are similar. Local generation wall times are not used to claim speedup: prompt caching, model loading, interruption, and retry effects were not controlled as a timing experiment.
+
+\subsection{Ablation Findings}
+\begin{table}[t]\caption{Retrieval ablations. Answer generation was evaluated only for fixed $K=10$ and the full extension.}\label{tab:ablation}\centering\small
+\begin{tabular}{lrrrr}\toprule
+Method & Entries & Raw \% & Context \% & Rounds\\\midrule
+Fixed $K=10$&39.40&98.5&93.0&3.94\\
+Query-only&38.20&98.0&93.0&3.94\\
+Evidence-only&32.70&98.5&92.5&3.81\\
+Full extension&32.65&97.5&93.5&3.83\\\bottomrule
+\end{tabular}\end{table}
+Query-only initialization reduces entries by approximately 3.0\%, with unchanged final-context recall and round count. Evidence-only adaptation reduces entries by approximately 17.0\%, preserves raw recall, and lowers final-context recall to 92.5\%. The full extension retrieves nearly the same volume as evidence-only, but has higher retained recall and lower raw recall. These findings suggest that evidence feedback supplies most volume savings, while initialization can alter which evidence reaches the final context. They do not establish that both components are universally necessary.
+
+The full extension chooses $K=5$, $10$, and $15$ in 162, 172, and 49 rounds, respectively, across 383 rounds. Within-question depth changes occur in 95 of 100 questions. Thus adaptation is active rather than a fixed value hidden behind a policy switch. Evidence-only changes depth in 99 questions; query-only never changes depth within a question by construction. The ablations have single-run retrieval timings, so no timing-variability comparison is made for them.
+
+\section{Limitations and Reproducibility}
+The main limitation is scale. The 100-question subset and compact 991-passage corpus do not represent full open-domain HotpotQA retrieval. The original subset selection procedure and independence from earlier checkpoint development are not established by the recovered artifacts. Results must therefore be treated as a local validation study, not an unbiased held-out benchmark estimate. There is no cross-dataset evaluation or significance test, and only three timing repeats per main method.
+
+The lexical complexity score is sensitive to phrasing, capitalization, and language. Its entity proxy can miss entities or count ordinary capitalized text. Evidence counts inherit Labeler and Tagger errors. Strong extracted evidence does not guarantee that a smaller next search will preserve a required bridge. The decrease in raw recall is a concrete example of the trade-off, and should remain visible alongside efficiency gains.
+
+The selected depth levels and thresholds are not demonstrated to be optimal. Fixed-$K=5$, fixed-$K=15$, random or budget-matched schedules, threshold sensitivity, and answer-generation ablations are useful future controls. The current timing data cannot establish performance on other GPUs or measure end-to-end user latency. Generator token counts omit retrieval and labeling compute, and the recovered prompt permits direct answering when knowledge is insufficient, so a correct answer does not alone prove grounding in the retrieved evidence.
+
+Reproducibility artifacts preserve policy configuration, input and output hashes, source snapshots, per-round decisions, checkpoint-loading checks, answer JSONL files, and model/version provenance. Resume checks prevent mixing different inputs or settings. The final selector is explicitly identified as a new variant, and earlier historical answer scores are excluded from the current control. Local validation confirms all 200 answers align with their input questions and selected passage IDs, with no duplicate IDs and no context larger than ten passages.
+
+\section{Conclusion}
+A deterministic initial-depth analyzer and evidence-aware controller can be integrated into an existing EfficientRAG pipeline without retraining its models or replacing its stopping logic. In the local study, the full extension reduces retrieved entries by 17.1\% and mean retrieval time by 15.6\%, with a one-point loss in raw recall, a half-point gain in final-context recall, and small increases in answer EM/F1. Evidence feedback accounts for most volume reduction. Larger, independently selected evaluations and budget-matched controls are needed before claiming robust accuracy improvements or broad deployment benefits.
+
+\begin{thebibliography}{4}
+\bibitem{efficientrag} Z. Zhuang \emph{et al.}, ``EfficientRAG: Efficient Retriever for Multi-Hop Question Answering,'' in \emph{Proc. EMNLP}, 2024, pp. 3392--3411, doi: 10.18653/v1/2024.emnlp-main.199.
+\bibitem{hotpotqa} Z. Yang \emph{et al.}, ``HotpotQA: A Dataset for Diverse, Explainable Multi-hop Question Answering,'' in \emph{Proc. EMNLP}, 2018, pp. 2369--2380, doi: 10.18653/v1/D18-1259.
+\bibitem{contriever} G. Izacard \emph{et al.}, ``Unsupervised Dense Information Retrieval with Contrastive Learning,'' arXiv:2112.09118, 2021. [Online]. Available: \url{https://arxiv.org/abs/2112.09118}
+\bibitem{adaptive} S. Jeong, J. Baek, S. Cho, S. J. Hwang, and J. C. Park, ``Adaptive-RAG: Learning to Adapt Retrieval-Augmented Large Language Models through Question Complexity,'' in \emph{Proc. NAACL-HLT}, 2024, pp. 7036--7050, doi: 10.18653/v1/2024.naacl-long.389.
+\end{thebibliography}
+\end{document}

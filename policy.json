@@ -1,0 +1,4 @@
+{
+  "complexity": {"k_values": [3, 5, 8], "length_threshold": 16, "long_threshold": 25, "medium_score": 1, "high_score": 3},
+  "controller": {"min_k": 3, "max_k": 10, "step": 2, "min_useful": 2, "low_useful_ratio": 0.25, "redundancy_ratio": 0.75}
+}

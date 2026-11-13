@@ -1,0 +1,119 @@
+[
+  {
+    "questions": 3,
+    "gold_documents": 3,
+    "raw_found": 3,
+    "retained_found": 3,
+    "raw_recall": 1.0,
+    "labeler_retained_recall": 1.0,
+    "raw_all_gold_pct": 100.0,
+    "retained_all_gold_pct": 100.0,
+    "average_rounds": 4.0,
+    "average_retrieved_passages": 20.0,
+    "retrieval_calls": 12,
+    "average_search_seconds": 1.3722002525658658e-05,
+    "average_pipeline_seconds": 7.323599978311297e-05,
+    "k_distribution": {
+      "5": 12
+    },
+    "distinct_k": 1,
+    "within_question_k_changes": 0,
+    "experiment": "A_fixed5",
+    "status": "SYNTHETIC_NOT_RESEARCH"
+  },
+  {
+    "questions": 3,
+    "gold_documents": 3,
+    "raw_found": 3,
+    "retained_found": 3,
+    "raw_recall": 1.0,
+    "labeler_retained_recall": 1.0,
+    "raw_all_gold_pct": 100.0,
+    "retained_all_gold_pct": 100.0,
+    "average_rounds": 4.0,
+    "average_retrieved_passages": 40.0,
+    "retrieval_calls": 12,
+    "average_search_seconds": 1.916599891652974e-05,
+    "average_pipeline_seconds": 6.879133313001755e-05,
+    "k_distribution": {
+      "10": 12
+    },
+    "distinct_k": 1,
+    "within_question_k_changes": 0,
+    "experiment": "B_fixed10",
+    "status": "SYNTHETIC_NOT_RESEARCH"
+  },
+  {
+    "questions": 3,
+    "gold_documents": 3,
+    "raw_found": 3,
+    "retained_found": 3,
+    "raw_recall": 1.0,
+    "labeler_retained_recall": 1.0,
+    "raw_all_gold_pct": 100.0,
+    "retained_all_gold_pct": 100.0,
+    "average_rounds": 4.0,
+    "average_retrieved_passages": 21.333333333333332,
+    "retrieval_calls": 12,
+    "average_search_seconds": 1.2375334335956722e-05,
+    "average_pipeline_seconds": 0.0001609726653744777,
+    "k_distribution": {
+      "3": 4,
+      "5": 4,
+      "8": 4
+    },
+    "distinct_k": 3,
+    "within_question_k_changes": 0,
+    "experiment": "C_query",
+    "status": "SYNTHETIC_NOT_RESEARCH"
+  },
+  {
+    "questions": 3,
+    "gold_documents": 3,
+    "raw_found": 3,
+    "retained_found": 3,
+    "raw_recall": 1.0,
+    "labeler_retained_recall": 1.0,
+    "raw_all_gold_pct": 100.0,
+    "retained_all_gold_pct": 100.0,
+    "average_rounds": 4.0,
+    "average_retrieved_passages": 16.0,
+    "retrieval_calls": 12,
+    "average_search_seconds": 9.680003131506965e-06,
+    "average_pipeline_seconds": 5.616666627853798e-05,
+    "k_distribution": {
+      "3": 6,
+      "5": 6
+    },
+    "distinct_k": 2,
+    "within_question_k_changes": 3,
+    "experiment": "D_dynamic",
+    "status": "SYNTHETIC_NOT_RESEARCH"
+  },
+  {
+    "questions": 3,
+    "gold_documents": 3,
+    "raw_found": 3,
+    "retained_found": 3,
+    "raw_recall": 1.0,
+    "labeler_retained_recall": 1.0,
+    "raw_all_gold_pct": 100.0,
+    "retained_all_gold_pct": 100.0,
+    "average_rounds": 4.0,
+    "average_retrieved_passages": 18.0,
+    "retrieval_calls": 12,
+    "average_search_seconds": 1.0153001009409005e-05,
+    "average_pipeline_seconds": 6.422233248789173e-05,
+    "k_distribution": {
+      "3": 6,
+      "4": 1,
+      "5": 2,
+      "6": 1,
+      "8": 2
+    },
+    "distinct_k": 5,
+    "within_question_k_changes": 2,
+    "experiment": "E_full",
+    "status": "SYNTHETIC_NOT_RESEARCH"
+  }
+]

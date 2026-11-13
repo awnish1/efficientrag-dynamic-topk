@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Model/checkpoint files
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+
+# Large retrieval artifacts
+*.faiss
+*.index
+
+# Local datasets
+data/raw/
+data/reconstructed/
+*.jsonl
+
+# Experiment-generated temporary files
+tmp/
+temp/
+cache/
+wandb/
+logs/
+
+# Local outputs
+*.log
+
+# Python packaging
+build/
+dist/
+*.egg-info/
+
+# Ollama/local model files
+.ollama/
+
+# Large/local datasets
+data/raw/
+data/reconstructed/
+
+# Local experiment dumps
+results/local_runs/
+results/full_runs/
+
+# Internal recovery/audit artifacts
+audit/
+backups/

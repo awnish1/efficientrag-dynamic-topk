@@ -1,0 +1,340 @@
+diff --git a/src/adaptive_k/__init__.py b/src/adaptive_k/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/src/adaptive_k/complexity.py b/src/adaptive_k/complexity.py
+new file mode 100644
+--- /dev/null
++++ b/src/adaptive_k/complexity.py
+@@ -0,0 +1,42 @@
++"""Cheap, deterministic surface features; these are hypotheses, not calibrated scores."""
++import re
++from dataclasses import dataclass, asdict
++
++
++@dataclass(frozen=True)
++class ComplexityConfig:
++    k_values: tuple = (3, 5, 8)
++    length_threshold: int = 16
++    long_threshold: int = 25
++    medium_score: int = 1
++    high_score: int = 3
++
++    def __post_init__(self):
++        if len(self.k_values) != 3 or any(type(k) is not int or k < 1 for k in self.k_values):
++            raise ValueError('k_values must contain three positive integers')
++        if list(self.k_values) != sorted(set(self.k_values)):
++            raise ValueError('k_values must be strictly increasing')
++        if not 0 < self.length_threshold <= self.long_threshold:
++            raise ValueError('Invalid length thresholds')
++        if not 0 < self.medium_score < self.high_score:
++            raise ValueError('Invalid score thresholds')
++
++
++class ComplexityAnalyzer:
++    def __init__(self, config=None):
++        self.config = config or ComplexityConfig()
++
++    def analyze(self, question):
++        words = re.findall(r"\b[\w'-]+\b", question)
++        text = question.lower()
++        # Capitalized spans are an entity proxy, not an NER claim. Skip question opener.
++        spans = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', ' '.join(words[1:]))
++        relational = len(re.findall(r'\b(?:whose|that|which|who)\b', ' '.join(words[1:]).lower()))
++        comparison = bool(re.search(r'\b(?:both|same|different|earlier|later|older|younger|more|less|compare|comparison)\b', text))
++        c = self.config
++        score = (int(len(words) >= c.length_threshold) + int(len(words) >= c.long_threshold)
++                 + int(len(spans) >= 2) + int(relational > 0) + int(comparison))
++        level = 2 if score >= c.high_score else 1 if score >= c.medium_score else 0
++        return {'k': c.k_values[level], 'score': score, 'level': ['low','medium','high'][level],
++                'features': {'words': len(words), 'capitalized_spans': len(spans),
++                             'relational_markers': relational, 'comparison': comparison}}
+diff --git a/src/adaptive_k/controller.py b/src/adaptive_k/controller.py
+new file mode 100644
+--- /dev/null
++++ b/src/adaptive_k/controller.py
+@@ -0,0 +1,53 @@
++"""Controller consumes observed counts only; cannot inspect answers or gold IDs."""
++from dataclasses import dataclass
++
++
++@dataclass(frozen=True)
++class ControllerConfig:
++    min_k: int = 3
++    max_k: int = 10
++    step: int = 2
++    min_useful: int = 2
++    low_useful_ratio: float = 0.25
++    redundancy_ratio: float = 0.75
++
++    def __post_init__(self):
++        if any(type(x) is not int for x in (self.min_k, self.max_k, self.step, self.min_useful)):
++            raise ValueError('K, step, and counts must be integers')
++        if not 1 <= self.min_k <= self.max_k or self.step < 1 or self.min_useful < 1:
++            raise ValueError('Invalid controller bounds')
++        if not 0 <= self.low_useful_ratio <= 1 or not 0 <= self.redundancy_ratio <= 1:
++            raise ValueError('Ratios must be in [0, 1]')
++
++
++@dataclass(frozen=True)
++class Feedback:
++    retrieved: int
++    useful: int
++    new: int
++    new_useful: int
++
++    def __post_init__(self):
++        if any(type(x) is not int or x < 0 for x in (self.retrieved,self.useful,self.new,self.new_useful)):
++            raise ValueError('Feedback counts must be nonnegative integers')
++        if self.useful > self.retrieved or self.new > self.retrieved or self.new_useful > min(self.new,self.useful):
++            raise ValueError('Inconsistent feedback counts')
++
++
++class DynamicController:
++    def __init__(self, config=None):
++        self.config = config or ControllerConfig()
++
++    def update(self, k, feedback):
++        c = self.config
++        if feedback.retrieved == 0:
++            target, reason = k + c.step, 'empty_results'
++        elif (1 - feedback.new / feedback.retrieved >= c.redundancy_ratio
++              and feedback.new_useful == 0):
++            target, reason = k - c.step, 'redundant_without_new_useful_evidence'
++        elif feedback.useful < c.min_useful or feedback.useful / feedback.retrieved < c.low_useful_ratio:
++            target, reason = k + c.step, 'sparse_useful_evidence'
++        else:
++            target, reason = k, 'maintain_evidence_yield'
++        selected = max(c.min_k, min(c.max_k, target))
++        return selected, reason + ('_bounded' if selected != target else '')
+diff --git a/src/adaptive_k/evaluation.py b/src/adaptive_k/evaluation.py
+new file mode 100644
+--- /dev/null
++++ b/src/adaptive_k/evaluation.py
+@@ -0,0 +1,43 @@
++"""Gold annotations are used only here, after retrieval has completed."""
++from collections import Counter
++
++
++def summarize(results):
++    if not results:
++        raise ValueError('No results to summarize')
++    gold_total = raw_found = retained_found = raw_all = retained_all = rounds = passages = 0
++    search_seconds = pipeline_seconds = 0.0
++    histogram = Counter()
++    for result in results:
++        gold = set(result['oracle'])
++        if not gold:
++            raise ValueError('Recall requires nonempty gold IDs')
++        raw, retained = set(), set()
++        for key, hop in result.items():
++            if not str(key).isdigit():
++                continue
++            rounds += 1
++            histogram[hop['k']] += 1
++            search_seconds += hop['search_seconds']
++            passages += len(hop['docs'])
++            for doc in hop['docs']:
++                ids = set(doc['id'].split('//'))
++                raw.update(ids)
++                if doc['label'] != '<TERMINATE>':
++                    retained.update(ids)
++        gold_total += len(gold)
++        raw_found += len(gold & raw)
++        retained_found += len(gold & retained)
++        raw_all += int(gold <= raw)
++        retained_all += int(gold <= retained)
++        pipeline_seconds += result['pipeline_seconds']
++    n = len(results)
++    return {'questions':n, 'gold_documents':gold_total, 'raw_found':raw_found,
++            'retained_found':retained_found, 'raw_recall':raw_found/gold_total,
++            'labeler_retained_recall':retained_found/gold_total,
++            'raw_all_gold_pct':100*raw_all/n, 'retained_all_gold_pct':100*retained_all/n,
++            'average_rounds':rounds/n, 'average_retrieved_passages':passages/n,
++            'retrieval_calls':rounds, 'average_search_seconds':search_seconds/n,
++            'average_pipeline_seconds':pipeline_seconds/n,
++            'k_distribution':dict(sorted(histogram.items())), 'distinct_k':len(histogram),
++            'within_question_k_changes':sum(len({v['k'] for k,v in r.items() if str(k).isdigit()})>1 for r in results)}
+diff --git a/src/adaptive_k/policy.py b/src/adaptive_k/policy.py
+new file mode 100644
+--- /dev/null
++++ b/src/adaptive_k/policy.py
+@@ -0,0 +1,46 @@
++from dataclasses import asdict
++from .complexity import ComplexityAnalyzer, ComplexityConfig
++from .controller import DynamicController, ControllerConfig, Feedback
++
++MODES = ('fixed', 'query', 'dynamic', 'full')
++
++
++class RetrievalPolicy:
++    def __init__(self, mode='fixed', top_k=10, config=None):
++        if mode not in MODES or type(top_k) is not int or top_k < 1:
++            raise ValueError('Invalid mode or top_k')
++        config = config or {}
++        if set(config) - {'complexity', 'controller'}:
++            raise ValueError('Unknown configuration section')
++        self.mode, self.top_k = mode, top_k
++        self.analyzer = ComplexityAnalyzer(ComplexityConfig(**config.get('complexity', {})))
++        self.controller = DynamicController(ControllerConfig(**config.get('controller', {})))
++        c = self.controller.config
++        if mode in ('dynamic', 'full') and not c.min_k <= top_k <= c.max_k:
++            raise ValueError('Initial K outside controller bounds')
++        if mode in ('query','full') and any(not c.min_k <= k <= c.max_k for k in self.analyzer.config.k_values):
++            raise ValueError('Complexity K values outside bounds')
++
++    def start(self, question):
++        decision = self.analyzer.analyze(question) if self.mode in ('query','full') else {'k':self.top_k,'level':'fixed'}
++        return decision['k'], decision
++
++    def advance(self, k, chunks, labels, seen):
++        # IDs are used for equality/deduplication only, never parsed for gold information.
++        current_seen = set(seen)
++        new = useful = new_useful = 0
++        for chunk, label in zip(chunks, labels):
++            novel = chunk['id'] not in current_seen
++            good = label == '<CONTINUE>'
++            new += int(novel); useful += int(good); new_useful += int(novel and good)
++            current_seen.add(chunk['id'])
++        feedback = Feedback(len(chunks), useful, new, new_useful)
++        if self.mode in ('dynamic','full'):
++            next_k, reason = self.controller.update(k, feedback)
++        else:
++            next_k, reason = k, 'fixed_for_question'
++        return next_k, {'feedback': asdict(feedback), 'next_k':next_k, 'reason':reason}, current_seen
++
++    def describe(self):
++        return {'mode':self.mode,'top_k':self.top_k,'complexity':asdict(self.analyzer.config),
++                'controller':asdict(self.controller.config)}
+diff --git a/src/efficientrag_retrieve.py b/src/efficientrag_retrieve.py
+--- a/src/efficientrag_retrieve.py
++++ b/src/efficientrag_retrieve.py
+@@ -2,6 +2,9 @@
+ import json
+ import os
+ import sys
++import time
++
++from adaptive_k.policy import RetrievalPolicy, MODES
+ from typing import Iterator
+ 
+ import spacy
+@@ -48,6 +51,11 @@
+     parser.add_argument("--topk", type=int, default=10)
+     parser.add_argument("--suffix", type=str, default="")
+     parser.add_argument("--test", action="store_true")
++    parser.add_argument('--mode', choices=MODES, default='fixed')
++    parser.add_argument('--policy-config', help='JSON complexity/controller settings')
++    parser.add_argument('--max-rounds', type=int, default=MAX_ITER)
++    parser.add_argument('--limit', type=int, help='First N questions; use 5 for smoke test')
++    parser.add_argument('--output', help='New JSONL path; existing files are refused')
+     return parser.parse_args()
+ 
+ 
+@@ -180,13 +188,22 @@
+     tokenizer: PreTrainedTokenizer,
+     dataset: list[dict],
+     top_k: int = 10,
++    mode: str = 'fixed',
++    policy_config: dict = None,
++    max_rounds: int = MAX_ITER,
+ ) -> Iterator[dict]:
++    if type(max_rounds) is not int or not 1 <= max_rounds <= MAX_ITER:
++        raise ValueError(f'max_rounds must be between 1 and {MAX_ITER}')
++    policy = RetrievalPolicy(mode, top_k, policy_config)
+     nlp = spacy.load("en_core_web_sm")
+     for sample in tqdm_rich(dataset):
+     # for sample in dataset:
+         iter = 0
+         filter_input = ""
+         query = sample["question"]
++        question_start = time.perf_counter()
++        current_k, initial_decision = policy.start(query)
++        seen = set()
+         sample_chunks = {
+             "query": query,
+             "answer": sample["answer"],
+@@ -199,15 +216,28 @@
+                 for chunk in sample["decomposed_questions"].values()
+             ],
+         }
+-        while iter < MAX_ITER:
++        sample_chunks['policy'] = policy.describe()
++        sample_chunks['initial_decision'] = initial_decision
++        sample_chunks['stop_reason'] = 'max_rounds'
++        while iter < max_rounds:
+             next_query_info = []
+-            chunks = retriever.search(query, top_k=top_k)[0]
++            search_start = time.perf_counter()
++            batches = retriever.search(query, top_k=current_k)
++            chunks = batches[0] if batches else []
++            search_seconds = time.perf_counter() - search_start
+             chunk_texts = [chunk["text"] for chunk in chunks]
+-            infos, labels = label_info(labeler, tokenizer, nlp, query, chunk_texts)
++            infos, labels = (label_info(labeler, tokenizer, nlp, query, chunk_texts)
++                             if chunks else ([], []))
++            if len(infos) != len(chunks) or len(labels) != len(chunks):
++                raise ValueError('Labeler returned a different number of predictions than passages')
++            next_k, decision, seen = policy.advance(current_k, chunks, labels, seen)
+             sample_chunks[iter] = {
+                 "query": query,
+                 "filter_input": filter_input,
+                 "docs": [],
++                "k": current_k,
++                "search_seconds": search_seconds,
++                "decision": decision,
+             }
+             for chunk_info, label, chunk in zip(infos, labels, chunks):
+                 sample_chunk = {
+@@ -225,15 +255,30 @@
+                     continue
+ 
+             if len(next_query_info) == 0:
++                sample_chunks['stop_reason'] = 'no_continue_labels'
++                sample_chunks[iter]['decision']['applied'] = False
+                 break
++            sample_chunks[iter]['decision']['applied'] = iter + 1 < max_rounds
+             filter_input, query = filter_query(
+                 filter, tokenizer, nlp, query, next_query_info
+             )
++            current_k = next_k
+             iter += 1
++        sample_chunks['pipeline_seconds'] = time.perf_counter() - question_start
+         yield sample_chunks
+ 
+ 
+ def main(opt: argparse.Namespace):
++    # Validate options and output before loading GPU models.
++    policy_config = json.load(open(opt.policy_config)) if opt.policy_config else None
++    RetrievalPolicy(opt.mode, opt.topk, policy_config)
++    if not 1 <= opt.max_rounds <= MAX_ITER or (opt.limit is not None and opt.limit < 1):
++        raise ValueError('Invalid round/sample limit')
++    output_path = opt.output or os.path.join(
++        RETRIEVE_RESULT_PATH, 'efficient_rag', f'{opt.dataset}-{opt.suffix}.jsonl')
++    if os.path.exists(output_path):
++        raise FileExistsError(output_path)
++    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+     labeler = (
+         DebertaForSequenceTokenClassification.from_pretrained(
+             opt.labeler_ckpt, token_labels=2, sequence_labels=opt.labels
+@@ -264,14 +309,16 @@
+     if opt.test:
+         dataset = dataset[:100]
+ 
+-    output_path = os.path.join(
+-        RETRIEVE_RESULT_PATH, "efficient_rag", f"{opt.dataset}-{opt.suffix}.jsonl"
+-    )
++    if opt.limit is not None:
++        dataset = dataset[:opt.limit]
++    if not dataset:
++        raise ValueError('No evaluation examples')
+     import time
+     start = time.time()
+-    with open(output_path, "w+", encoding="utf-8") as f:
++    with open(output_path, "x", encoding="utf-8") as f:
+         for chunk in efficient_rag(
+-            labeler, filter, retriever, tokenizer, dataset, top_k=opt.topk
++            labeler, filter, retriever, tokenizer, dataset, top_k=opt.topk,
++            mode=opt.mode, policy_config=policy_config, max_rounds=opt.max_rounds
+         ):
+             d = json.dumps(chunk, ensure_ascii=False)
+             f.write(d + "\n")

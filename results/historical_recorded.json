@@ -1,0 +1,33 @@
+{
+  "source": "efficient.ipynb cells 244\u2013247 (zero-based)",
+  "results": [
+    {
+      "status": "historical_recorded_not_reproduced",
+      "labeler": "checkpoint-9000",
+      "filter": "checkpoint-500",
+      "k": 10,
+      "questions": 100,
+      "raw_found": 199,
+      "gold_documents": 200,
+      "retained_found": 178,
+      "raw_all_gold_questions": 99,
+      "retained_all_gold_questions": 79,
+      "average_rounds": 3.47,
+      "recorded_pipeline_seconds": 157.19
+    },
+    {
+      "status": "historical_recorded_not_reproduced",
+      "labeler": "checkpoint-8000",
+      "filter": "checkpoint-500",
+      "k": 10,
+      "questions": 100,
+      "raw_found": 197,
+      "gold_documents": 200,
+      "retained_found": 186,
+      "raw_all_gold_questions": 97,
+      "retained_all_gold_questions": 88,
+      "average_rounds": 3.92,
+      "recorded_pipeline_seconds": 179.07
+    }
+  ]
+}

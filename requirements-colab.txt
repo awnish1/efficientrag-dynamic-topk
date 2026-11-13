@@ -1,0 +1,13 @@
+# Inference only. Retain Colab's CUDA-compatible PyTorch; do not install upstream training/serving stack.
+transformers==4.46.3
+tokenizers==0.20.3
+huggingface-hub==0.36.2
+faiss-cpu
+sentencepiece>=0.2.0
+spacy>=3.8,<3.9
+rich
+tqdm
+tenacity
+openai>=1,<2
+msal
+requests
